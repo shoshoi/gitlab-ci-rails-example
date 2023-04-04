@@ -1,0 +1,87 @@
+image: ruby:3.0.1
+
+.only-default: &only-default
+  only:
+    - branches@shoshoi/ci-test
+    - master
+    - merge_requests
+
+variables:
+  CAP_USER: "deployer"
+  BUNDLE_CACHE: "vendor/bundle/"
+  RAILS_ENV: "test"
+  CI: "true"
+
+cache:
+  untracked: true
+  key: "$CI_BUILD_NAME"
+  paths:
+  - vendor/bundle/
+
+services:
+  - mysql:5.7
+variables:
+  MYSQL_ROOT_PASSWORD: "ci-test"
+
+stages:
+  - test
+  - feature
+
+rubocop:
+  stage: test
+  <<: *only-default
+  before_script:
+    - bundle install
+  script:
+    - bundle exec rubocop
+
+rspec:
+  stage: test
+  <<: *only-default
+  before_script:
+    - curl -sL https://deb.nodesource.com/setup_12.x | bash -
+    - apt-get install -y nodejs
+    - npm install -g yarn
+    - yarn install
+    - bundle config set path 'vendor/bundle'
+    - bundle check || bundle install --jobs=2 --retry=3
+    - bundle exec rake db:create RAILS_ENV=test
+    - bundle exec rake db:migrate:reset RAILS_ENV=test
+    - bundle exec rake webpacker:install RAILS_ENV=test
+  script:
+    - bundle exec rspec
+
+rspec_feature:
+  stage: test
+  <<: *only-default
+  only:
+    variables:
+      - $RUN_FEATURESPEC == "true"
+  before_script:
+    - apt-get update --allow-releaseinfo-change
+    - apt-get install -y sudo unzip --no-install-recommends
+    - sudo apt-get update --allow-releaseinfo-change
+    - CHROME_DRIVER_VERSION=`curl -sS chromedriver.storage.googleapis.com/LATEST_RELEASE` && \
+    - wget -N http://chromedriver.storage.googleapis.com/$CHROME_DRIVER_VERSION/chromedriver_linux64.zip -P ~/ && \
+    - unzip ~/chromedriver_linux64.zip -d ~/ && \
+    - rm ~/chromedriver_linux64.zip && \
+    - chown root:root ~/chromedriver && \
+    - chmod 755 ~/chromedriver && \
+    - mv ~/chromedriver /usr/bin/chromedriver && \
+    - sh -c 'wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -' && \
+    - sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list' && \
+    - apt-get update && apt-get install -y google-chrome-stable
+    - curl -sL https://deb.nodesource.com/setup_12.x | bash -
+    - apt-get install -y nodejs
+    - npm install -g yarn
+    - yarn install
+    - bundle config set path 'vendor/bundle'
+    - bundle check || bundle install --jobs=2 --retry=3
+    - bundle exec rake db:create RAILS_ENV=test
+    - bundle exec rake db:migrate:reset RAILS_ENV=test
+    - bundle exec rake webpacker:install RAILS_ENV=test
+  script:
+    - bundle exec rspec spec/system
+  artifacts:
+    paths:
+      - tmp/capybara/
