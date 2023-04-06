@@ -19,9 +19,18 @@ cache:
   - vendor/bundle/
 
 services:
-  - mysql:5.7
+  - name: mysql:5.7
+    alias: mysql
+  - name: mcr.microsoft.com/mssql/server:2019-CU6-ubuntu-16.04
+    alias: mssql-server
+      
 variables:
   MYSQL_ROOT_PASSWORD: "ci-test"
+  ACCEPT_EULA: Y
+  MSSQL_SA_PASSWORD : YourNewStrong@Passw0rd
+  MSSQL_PID: Express
+  MSSQL_LCID: 1041
+  MSSQL_COLLATION: Japanese_CI_AS
 
 stages:
   - test
@@ -31,6 +40,7 @@ rubocop:
   stage: test
   <<: *only-default
   before_script:
+    - docker exec -it mssql-server mkdir /var/opt/mssql/backup
     - bundle install
   script:
     - bundle exec rubocop
